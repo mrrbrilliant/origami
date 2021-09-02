@@ -1,6 +1,9 @@
+use gio::Cancellable;
+use std::process::Output;
 use webkit2gtk::traits::{SettingsExt, UserContentManagerExt, WebContextExt, WebViewExt};
 use webkit2gtk::{
-    self, LoadEvent, Settings, UserContentManager, WebContext, WebView, WebViewExtManual,
+    self, JavascriptResult, LoadEvent, Settings, UserContentManager, WebContext, WebView,
+    WebViewExtManual,
 };
 
 pub struct OrigamiWebView {
@@ -25,6 +28,97 @@ impl OrigamiWebView {
     pub fn load_uri(&self, uri: &str) {
         self.webview.load_uri(uri);
     }
+
+    // pub fn ipc<'a, 'b>(&self, handler: Box<dyn Fn(&'a UserContentManager, &'b JavascriptResult)>) {
+    //     let ucm = self.webview.user_content_manager();
+    //     if let Some(ucm) = ucm {
+    //         if ucm.register_script_message_handler("origami") {
+    //             ucm.connect_script_message_received(Some("origami"), handler);
+    //         }
+    //     }
+    // }
+    // Fn(&UserContentManager, &JavascriptResult) -> ()
+    // fn hander() -> impl Fn() {}
+    // pub fn ipc<'a, 'b, F: Fn<(&UserContentManager, &JavascriptResult), Output = ()> + 'static>(
+
+    // pub fn ipc<'a, 'b, F>(&self, f: F)
+    // where
+    //     F: Fn(&UserContentManager, &JavascriptResult) -> () + 'static,
+    // {
+    //     let ucm = self.webview.user_content_manager();
+    //     if let Some(ucm) = ucm {
+    //         if ucm.register_script_message_handler("origami") {
+    //             ucm.connect_script_message_received(Some("origami"), f);
+    //         }
+    //     }
+    // }
+
+    pub fn init_ipc(&self) {
+        &self.webview.connect_load_changed(|wv, event| {
+            if event != LoadEvent::Finished {
+                return;
+            }
+
+            let cancellable: Option<&Cancellable> = None;
+            wv.run_javascript(
+                "
+                window._requests = {};
+                window._request_id = 0;
+                window.myPostMessage = function (data) {
+                    return new Promise((resolve, reject) => {
+                        window._request_id += 1;
+                        window._requests[window._request_id] = [resolve, reject];
+                        let request = JSON.stringify({id: window._request_id, data: data});
+                        // console.log('Request', request);
+                        window.webkit.messageHandlers.origami.postMessage(request);
+                    });
+                };
+                window._myPostMessageResponse = function(response) {
+                    // console.log('Response', response);
+                    let [resolve, reject] = window._requests[response.id];
+                    resolve(response.data);
+                    delete window._requests[response.id];
+                };
+                ",
+                cancellable,
+                |result| {
+                    println!("inject internal js code result {:?}", result);
+                },
+            );
+        });
+    }
+
+    pub fn ipc<'a, F>(self, handler: F)
+    where
+        F: Fn(String) -> String + 'static,
+    {
+        // let webview = self.webview.clone();
+        self.init_ipc();
+        let ucm = self.webview.user_content_manager();
+        if let Some(ucm) = ucm {
+            if ucm.register_script_message_handler("origami") {
+                ucm.connect_script_message_received(Some("origami"), move |ucm, jsr| {
+                    let ctx = jsr.global_context().unwrap();
+                    let val = jsr.value().unwrap();
+                    let request = val.to_string(&ctx).unwrap();
+                    // let request: Request = serde_json::from_str(&request).unwrap();
+                    // println!("Request {}", request);
+
+                    let response = handler(request);
+                    println!("Response {}", response);
+                    let cancellable: Option<&Cancellable> = None;
+                    self.webview.clone().run_javascript(
+                        &format!("window._myPostMessageResponse({});", response),
+                        cancellable,
+                        |result| {
+                            println!("myPostMessageResponse result {:?}", result);
+                        },
+                    );
+                });
+            }
+        };
+    }
+
     pub fn settings(&self, configs: Vec<OrigamiWebViewSettings>) {
         let settings = WebViewExt::settings(&self.webview).unwrap();
         for config in configs.iter() {

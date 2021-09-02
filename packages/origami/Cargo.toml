@@ -8,3 +8,4 @@ edition = "2018"
 [dependencies]
 origami-window = { path = "../origami-window" }
 origami-webview = { path = "../origami-webview" }
+origami-bridge = { path = "../origami-bridge" }
