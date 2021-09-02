@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "packages/origami",
+    "packages/origami-bridge",
+    "packages/origami-webview",
+    "packages/origami-window",
+    "example"
+]
