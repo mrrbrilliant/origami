@@ -1,5 +1,6 @@
+use std::io::Read;
+
 use gio::Cancellable;
-use std::process::Output;
 use webkit2gtk::traits::{SettingsExt, UserContentManagerExt, WebContextExt, WebViewExt};
 use webkit2gtk::{
     self, JavascriptResult, LoadEvent, Settings, UserContentManager, WebContext, WebView,
@@ -29,29 +30,12 @@ impl OrigamiWebView {
         self.webview.load_uri(uri);
     }
 
-    // pub fn ipc<'a, 'b>(&self, handler: Box<dyn Fn(&'a UserContentManager, &'b JavascriptResult)>) {
-    //     let ucm = self.webview.user_content_manager();
-    //     if let Some(ucm) = ucm {
-    //         if ucm.register_script_message_handler("origami") {
-    //             ucm.connect_script_message_received(Some("origami"), handler);
-    //         }
-    //     }
-    // }
-    // Fn(&UserContentManager, &JavascriptResult) -> ()
-    // fn hander() -> impl Fn() {}
-    // pub fn ipc<'a, 'b, F: Fn<(&UserContentManager, &JavascriptResult), Output = ()> + 'static>(
-
-    // pub fn ipc<'a, 'b, F>(&self, f: F)
-    // where
-    //     F: Fn(&UserContentManager, &JavascriptResult) -> () + 'static,
-    // {
-    //     let ucm = self.webview.user_content_manager();
-    //     if let Some(ucm) = ucm {
-    //         if ucm.register_script_message_handler("origami") {
-    //             ucm.connect_script_message_received(Some("origami"), f);
-    //         }
-    //     }
-    // }
+    pub fn load_html(&self, file_path: &str, base_uri: Option<&str>) {
+        let mut content = String::new();
+        let mut file = std::fs::File::open(file_path).unwrap();
+        file.read_to_string(&mut content).unwrap();
+        self.webview.load_html(&content, base_uri)
+    }
 
     pub fn init_ipc(&self) {
         &self.webview.connect_load_changed(|wv, event| {
@@ -64,17 +48,15 @@ impl OrigamiWebView {
                 "
                 window._requests = {};
                 window._request_id = 0;
-                window.myPostMessage = function (data) {
+                window.PostMessage = function (data) {
                     return new Promise((resolve, reject) => {
                         window._request_id += 1;
                         window._requests[window._request_id] = [resolve, reject];
                         let request = JSON.stringify({id: window._request_id, data: data});
-                        // console.log('Request', request);
                         window.webkit.messageHandlers.origami.postMessage(request);
                     });
                 };
-                window._myPostMessageResponse = function(response) {
-                    // console.log('Response', response);
+                window._PostMessageResponse = function(response) {
                     let [resolve, reject] = window._requests[response.id];
                     resolve(response.data);
                     delete window._requests[response.id];
@@ -92,20 +74,22 @@ impl OrigamiWebView {
     where
         F: Fn(String) -> String + 'static,
     {
-        // let webview = self.webview.clone();
         self.init_ipc();
         let ucm = self.webview.user_content_manager();
         if let Some(ucm) = ucm {
             if ucm.register_script_message_handler("origami") {
-                ucm.connect_script_message_received(Some("origami"), move |ucm, jsr| {
+                ucm.connect_script_message_received(Some("origami"), move |_ucm, jsr| {
+                    #[allow(deprecated)]
                     let ctx = jsr.global_context().unwrap();
+                    #[allow(deprecated)]
                     let val = jsr.value().unwrap();
                     let request = val.to_string(&ctx).unwrap();
-                    // let request: Request = serde_json::from_str(&request).unwrap();
-                    // println!("Request {}", request);
 
                     let response = handler(request);
+
+                    #[cfg(debug_assertions)]
                     println!("Response {}", response);
+
                     let cancellable: Option<&Cancellable> = None;
                     self.webview.clone().run_javascript(
                         &format!("window._myPostMessageResponse({});", response),
@@ -169,7 +153,9 @@ impl OrigamiWebView {
                 }
                 OrigamiWebViewSettings::PageCache(s) => settings.set_enable_page_cache(*s),
                 OrigamiWebViewSettings::Plugins(s) => settings.set_enable_plugins(*s),
-                OrigamiWebViewSettings::PrivateBrowsing(s) => {
+                OrigamiWebViewSettings::PrivateBrowsing(s) =>
+                {
+                    #[allow(deprecated)]
                     settings.set_enable_private_browsing(*s)
                 }
                 OrigamiWebViewSettings::ResizableTextAreas(s) => {

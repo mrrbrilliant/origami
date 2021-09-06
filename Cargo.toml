@@ -2,6 +2,7 @@
 members = [
     "packages/origami",
     "packages/origami-bridge",
+    "packages/origami-generate",
     "packages/origami-webview",
     "packages/origami-window",
     "example"
