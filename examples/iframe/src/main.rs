@@ -18,7 +18,9 @@ fn main() {
     ]);
 
     window.bind(&webview);
-
+    window.default_size(440, 680);
+    window.resizable(false);
+    window.frame(false);
     webview.ipc(|req| {
         let request = Request::from_str(&req);
         request.to_string()

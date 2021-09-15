@@ -8,8 +8,8 @@ fn main() {
             "generate",
             "--verbose",
             "--git",
-            "https://github.com/rustwasm/wasm-pack-template.git",
-            "packaes/origami-template",
+            "https://github.com/mrrbrilliant/origami.git",
+            "packages/origami-template",
             "--name",
         ])
         .args(&args)

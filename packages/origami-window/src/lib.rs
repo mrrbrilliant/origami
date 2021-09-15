@@ -30,8 +30,20 @@ impl OrigamiWindow {
         Self { window }
     }
 
-    pub fn set_title(&mut self, title: String) {
-        self.window.set_title(&title);
+    pub fn default_size(&self, width: i32, height: i32) {
+        self.window.set_default_size(width, height);
+    }
+
+    pub fn resize(&self, width: i32, height: i32) {
+        self.window.resize(width, height);
+    }
+
+    pub fn resizable(&self, option: bool) {
+        self.window.set_resizable(option);
+    }
+
+    pub fn frame(&self, option: bool) {
+        self.window.set_decorated(option);
     }
 
     pub fn set_hint(&self, hint: &str) {
@@ -62,6 +74,10 @@ impl OrigamiWindow {
                 self.window.set_type_hint(gdk::WindowTypeHint::Normal)
             }
         }
+    }
+
+    pub fn set_title(&mut self, title: String) {
+        self.window.set_title(&title);
     }
 
     pub fn bind(&self, webview: &OrigamiWebView) {
